@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chat - PARSOZ</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #000;
+      color: white;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    h1 {
+      margin: 20px 0 10px;
+      text-align: center;
+    }
+    .logout-btn {
+      background-color: #f44336;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .logout-btn:hover {
+      background-color: #d32f2f;
+    }
+    .main {
+      display: flex;
+      flex: 1;
+      padding: 10px;
+      gap: 20px;
+    }
+    .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: #111;
+      border-radius: 10px;
+      box-shadow: 0 0 10px #4CAF50;
+      overflow: hidden;
+    }
+    .messages {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      border-bottom: 2px solid #222;
+    }
+    .message {
+      margin-bottom: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background-color: #333;
+    }
+    .input-container {
+      display: flex;
+      padding: 10px;
+      background-color: #222;
+    }
+    .input-container input {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      background-color: #333;
+      color: white;
+      margin-right: 10px;
+    }
+    .input-container button {
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      cursor: pointer;
+    }
+    .input-container button:hover {
+      background-color: #3e8e41;
+    }
+    #userList {
+      width: 200px;
+      background-color: #111;
+      border-radius: 10px;
+      padding: 10px;
+      overflow-y: auto;
+      box-shadow: 0 0 10px #2196F3;
+    }
+    #userList div {
+      padding: 8px;
+      cursor: pointer;
+      border-bottom: 1px solid #222;
+    }
+    #userList div:hover {
+      background-color: #333;
+    }
+    .hidden {
+      display: none;
+    }
+    .back-btn {
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .back-btn:hover {
+      background-color: #1976D2;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>PARSOZ Chat</h1>
+  <div style="display: flex; gap: 10px; justify-content: center;">
+    <button class="logout-btn" onclick="logout()">Cerrar sesión</button>
+    <button class="back-btn" onclick="window.location.href='index.html'">Volver al Inicio</button>
+  </div>
+
+  <div class="main">
+    <!-- Lista de usuarios -->
+    <div id="userList">
+      <h3>Usuarios conectados:</h3>
+    </div>
+
+    <!-- Chat público -->
+    <div class="chat-container" id="publicChat">
+      <h2>Chat Público</h2>
+      <div id="messages" class="messages"></div>
+      <div class="input-container">
+        <input type="text" id="messageInput" placeholder="Escribe un mensaje...">
+        <button onclick="sendMessage()">Enviar</button>
+      </div>
+    </div>
+
+    <!-- Chat privado -->
+    <div class="chat-container hidden" id="privateChat">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2 id="privateTitle">Chat Privado</h2>
+        <button class="back-btn" onclick="backToPublic()">Volver al público</button>
+      </div>
+      <div id="privateMessages" class="messages"></div>
+      <div class="input-container">
+        <input type="text" id="privateMessageInput" placeholder="Escribe un mensaje privado...">
+        <button onclick="sendPrivateMessage()">Enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const messagesDiv = document.getElementById('messages');
+    const input = document.getElementById('messageInput');
+    const userName = localStorage.getItem('userName');
+    const userListDiv = document.getElementById('userList');
+
+    let currentPrivateUser = null;
+
+    if (!userName) {
+      alert("Debes iniciar sesión primero.");
+      window.location.href = "login.html";
+    }
+
+    socket.emit('register', userName);
+
+    function sendMessage() {
+      const text = input.value.trim();
+      if (text) {
+        const fullMessage = `${userName}: ${text}`;
+        socket.emit('chatMessage', fullMessage);
+        input.value = '';
+      }
+    }
+
+    socket.on('chatMessage', (msg) => {
+      const div = document.createElement('div');
+      div.className = 'message';
+      div.textContent = msg;
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+
+    input.addEventListener('keypress', function (event) {
+      if (event.key === 'Enter') {
+        sendMessage();
+      }
+    });
+
+    socket.on('userList', (users) => {
+      userListDiv.innerHTML = '<h3>Usuarios conectados:</h3>';
+      users.forEach(user => {
+        if (user !== userName) {
+          const div = document.createElement('div');
+          div.textContent = user;
+          div.onclick = () => openPrivateChat(user);
+          userListDiv.appendChild(div);
+        }
+      });
+    });
+
+    function openPrivateChat(user) {
+      document.getElementById('publicChat').classList.add('hidden');
+      document.getElementById('privateChat').classList.remove('hidden');
+      document.getElementById('privateTitle').textContent = `Chat Privado con ${user}`;
+      document.getElementById('privateMessages').innerHTML = '';
+      currentPrivateUser = user;
+    }
+
+    function backToPublic() {
+      document.getElementById('privateChat').classList.add('hidden');
+      document.getElementById('publicChat').classList.remove('hidden');
+      currentPrivateUser = null;
+    }
+
+    function sendPrivateMessage() {
+      const inputPrivate = document.getElementById('privateMessageInput');
+      const text = inputPrivate.value.trim();
+      if (text && currentPrivateUser) {
+        socket.emit('privateMessage', { to: currentPrivateUser, text });
+        addPrivateMessage(`(Tú): ${text}`);
+        inputPrivate.value = '';
+      }
+    }
+
+    socket.on('privateMessage', ({ from, text }) => {
+      if (currentPrivateUser === from) {
+        addPrivateMessage(`${from}: ${text}`);
+      } else {
+        alert(`Mensaje privado de ${from}: ${text}`);
+      }
+    });
+
+    function addPrivateMessage(msg) {
+      const div = document.createElement('div');
+      div.className = 'message';
+      div.textContent = msg;
+      document.getElementById('privateMessages').appendChild(div);
+      document.getElementById('privateMessages').scrollTop = document.getElementById('privateMessages').scrollHeight;
+    }
+
+    function logout() {
+      localStorage.removeItem('userName');
+      window.location.href = 'login.html';
+    }
+  </script>
+
+</body>
+</html>
